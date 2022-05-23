@@ -1,6 +1,6 @@
 
 provider "google" {
-  # insert your Project id here, this is MIS's internal id, not GCP's project_id
+  # note: this is primary key of the ProjectModel, not GCP's project_id
   project_id = "YOUR_PROJECT_ID"
   resources_app = "gcp_resources"
 }

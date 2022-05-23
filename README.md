@@ -76,7 +76,7 @@ Here is an HCL file defining some GCP Resources: a VPC Network, a Firewall and a
 // gcp_cluster_simple.tf
 
 provider "google" {
-  # insert your Project id here, this is MIS's internal id, not GCP's project_id
+  # note: this is primary key of the ProjectModel, not GCP's project_id
   project_id = "YOUR_PROJECT_ID"  
   resources_app = "gcp_resources"
 }
@@ -198,7 +198,7 @@ class GcpInstanceResource(GcpResource):
     @staticmethod
     def generate_provider_id(model_obj):
         project_id = model_obj.project.slug
-        zone = model_obj.extra.zone
+        zone = model_obj.x.zone
         return f'https://www.googleapis.com/compute/v1/projects/{project_id}/zones/{zone}/instances/{model_obj.slug}'
 
     
@@ -287,7 +287,7 @@ class GcpInstanceResource(GcpResource):
         success, self_link, resp = self.cli.create_instance(
             project_id=instance.project.slug,
             instance_name=instance.slug,
-            zone=instance.extra.zone,
+            zone=instance.x.zone,
             machine_type=instance.x.machine_type,  # notice the 'x'
             source_image=instance.x.source_image,
             network_name=instance.x.network.x.self_link
