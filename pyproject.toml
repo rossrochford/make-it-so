@@ -1,0 +1,33 @@
+[tool.poetry]
+name = "make-it-so"
+version = "0.1.0"
+description = ""
+authors = ["Your Name <you@example.com>"]
+
+[tool.poetry.dependencies]
+python = "^3.9"
+django-ninja = "^0.17.0"
+Django = "^4.0.3"
+python-hcl2 = "^3.0.5"
+structlog = "^21.5.0"
+requests = "^2.27.1"
+google-api-python-client = "^2.43.0"
+google-cloud-compute = "^1.2.0"
+django-celery-results = "^2.3.0"
+psycopg2-binary = "^2.9.3"
+psycopg2 = "^2.9.3"
+celery = {extras = ["gevent", "redis", "msgpack"], version = "^5.2.6"}
+attrdict = "^2.0.1"
+shortuuid = "^1.0.8"
+opentelemetry-exporter-jaeger = "^1.11.1"
+opentelemetry-api = "^1.11.1"
+opentelemetry-sdk = "^1.11.1"
+opentelemetry-instrumentation-celery = "^0.30b1"
+opentelemetry-instrumentation-django = "^0.30b1"
+invoke = "^1.7.1"
+
+[tool.poetry.dev-dependencies]
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
