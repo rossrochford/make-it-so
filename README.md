@@ -1,4 +1,4 @@
-# Make It So
+# Make It So :hammer_and_wrench:
 
 A generic declarative provisioning engine implemented in Python, Django and Celery.
 
