@@ -207,14 +207,7 @@ class GcpResource(ResourceBase):
 
     PROVIDER = GcpProvider
     PROVIDER_ID_FIELD = 'self_link'  
-    # PROVIDER_ID_FIELD must be set when implementing generate_provider_id(), it specifies where on the model it'll be stored
-    
-    # Setting PROVIDER_ID_FIELD tells the system to do the following:  
-    #       resource_model.extra_data['self_link'] = GcpInstanceResource.generate_provider_id(resource_model)
-    #       resource_model.save()
-    # With this set, all subsequent calls to ResourceBase.get_provider_identifier() will return the appropriate id.
-
-    # note: the default behaviour uses ResourceModel.slug with no generate_provider_id() implementation.
+    # PROVIDER_ID_FIELD specifies where to on the model store the provider id, it must be set when implementing generate_provider_id()
 ```
 
 When the system queries a Provider to check whether a Resource exists, it expects the API client to confirm or deny this by using a known *identifier*, unique within the Project.
