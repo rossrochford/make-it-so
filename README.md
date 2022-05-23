@@ -19,7 +19,7 @@ It maps declarative structures (Resources) to concrete imperative steps (tasks i
 
 Make It So uses Django's ORM to store and manage its state and Celery to execute tasks. It consists of the following primary elements: Resources, Dependencies, Transitions, States, Events, Providers and Projects.
 
-A **Resource** is a *thing* defined declaratively. Similar to Terraform we use **HCL** config files for this. Every Resource has a *state*, *desired_state* and a list of *dependencies*. 
+A **Resource** is a *thing* defined declaratively. Similar to Terraform we use **HCL** files to declare Resources. Resources have a *state*, *desired_state* and a list of *dependencies*. 
 When a user expresses a *desired_state* on a resource, the system looks for discrepancies and takes any necessary actions bring it in line with the desired state.
 
 **Dependencies** are other resources to be waited upon, for example a VM instance will depend on a VPC network.
@@ -113,7 +113,7 @@ resource "GcpInstanceResource" "test-instance" {
 ```
 
 --------
-"apply" your Resources:
+To "apply" your Resources run:
 
 ```bash
 # This imports Resources into Django's database and sets their desired_state to 'healthy'. 
@@ -207,24 +207,26 @@ class GcpResource(ResourceBase):
 
     PROVIDER = GcpProvider
     PROVIDER_ID_FIELD = 'self_link'  
-    # PROVIDER_ID_FIELD is the model field to use when comparing Resource models 
-    # against a Provider API client responses. By default, this is 'slug'.
+    # PROVIDER_ID_FIELD must be set when implementing generate_provider_id(), it specifies where on the model it'll be stored
     
     # Setting PROVIDER_ID_FIELD tells the system to do the following:  
     #       resource_model.extra_data['self_link'] = GcpInstanceResource.generate_provider_id(resource_model)
     #       resource_model.save()
+    # With this set, all subsequent calls to ResourceBase.get_provider_identifier() will return the appropriate id.
+
+    # note: the default behaviour uses ResourceModel.slug with no generate_provider_id() implementation.
 ```
 
-When the system queries a Provider to check whether a Resource exists, it expects the API client to confirm or deny this using some kind of unique *identifier*. 
+When the system queries a Provider to check whether a Resource exists, it expects the API client to confirm or deny this by using a known *identifier*, unique within the Project.
 
-The default of `ResourceModel.slug` is often sufficient, provided your Provider API client scopes its queries to the Project correctly. Here we're using GCP self_links here as they are easy to derive and unambiguous.
+The default of `ResourceModel.slug` is often sufficient, provided your Provider API client scopes its queries to the Project correctly. Here we're using GCP self_links here because they are easy to derive less ambiguous than *slug*.
 
 
 #### A note on identifiers: 
 
-A quirk of Make It So is that Resource identifiers must be knowable *before* the underlying Resource has been created. *ResourceModel.slug* is used by default because slugs are unique per Project and Resource-type. 
+A quirk of Make It So is that Resource identifiers must be knowable *before* the underlying Resource has been created. *ResourceModel.slug* is used by default because slugs are unique per Resource-type within a Project (enforced by the database). 
 
-Your API clients **must** also key Resources by the same identifier and must scope its queries to a Project. Take care when sharing credentials across multiple projects as this may cause name conflicts.
+Your API clients **must** also key Resources by the same identifier and must scope its queries to a Project. Take care when sharing credentials across multiple projects as this may result in name conflicts.
 
 ------------------------
 
@@ -328,11 +330,11 @@ class GcpInstanceResource(GcpResource):
 
 ```
 
-Dependencies also come into play here but in the opposite direction. If the network also has `desired_state="deleted"`", it will not be scheduled for deletion until instances on that network (that MIS knows about) have also been deleted.
+Dependencies also come into play here but in the opposite direction. If the network also has `desired_state="deleted"`", it will not be scheduled for deletion until instances on that network (that MIS knows about) have been deleted.
 
 ## Future work
 
-Make It So is in *very* early stages and **not** ready for production. Some outstanding work includes:
+Make It So is in early stages and **not** ready for production. Some outstanding work includes:
 
 - Tenacity levels: how do we decide whether and when to give up? The system needs a 'never give up' mode where **desired_state** reigns supreme.
 - The event-dispatch model is difficult to follow and reason about, it needs some deeper thought and documentation.
