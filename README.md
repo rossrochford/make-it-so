@@ -6,7 +6,7 @@ A generic declarative provisioning engine implemented in Python, Django and Cele
 
 **TL;DR**: Make It So is a Terraform clone written in Python.
 
-Make It So's goal is to reduce the amount of sequential, imperative code required to create *things*, in general. 
+Make It So is designed to reduce the amount of sequential, imperative code required to create *things*, in general. 
 It maps declarative structures (Resources) to concrete imperative steps (tasks in Celery). It frees you from having to worry (much) about problems such as:
 
 * handling failures and retries
@@ -15,9 +15,9 @@ It maps declarative structures (Resources) to concrete imperative steps (tasks i
 * tearing down and cleaning up reliably
 
 
-## Architectural Overview
+## Architecture Overview
 
-Make It So uses Django's ORM to store and manage its state and Celery to execute tasks. It consists of the following primary elements: Resources, Dependencies, Transitions, States, Events, Providers and Projects.
+Make It So uses Django's ORM to store its state and Celery to execute tasks. It consists of the following primary elements: Resources, Dependencies, Transitions, States, Events, Providers and Projects.
 
 A **Resource** is a *thing* defined declaratively. Similar to Terraform we use **HCL** files to declare Resources. Resources have a *state*, *desired_state* and a list of *dependencies*. 
 When a user expresses a *desired_state* on a resource, the system looks for discrepancies and takes any necessary actions bring it in line with the desired state.
@@ -29,7 +29,7 @@ For example an 'ensure_exists' Transition is responsible for ensuring a Resource
 
 **Events** are units of activity logged on Resources and Transitions, they not only provide an audit trail for debugging but may also propagate side effects and state changes.
 
-A **Provider** is the point of access to a 3rd-party system that creates the underlying Resources, for example a cloud provider. Typically, a Provider doesn't do very much, it simply knows how to instantiate the API Client(s) that Resource class implementations need. 
+A **Provider** is the point of access to a 3rd-party system that creates the underlying Resources, for example a cloud provider. Typically, a Provider doesn't do very much, it simply knows how to instantiate the API Client(s) that Resource implementations need. 
 
 A **Project** stores credentials for interacting with a Provider, this typically corresponds to some kind of user or account identity on the Provider.  Projects also act as a kind of container/group for related Resources and tend to 'scope' the query behavior of API clients.
 
@@ -68,6 +68,22 @@ $ python manage.py create_gcp_project
 $ redis-server  # this command may differ on your system
 $ celery -A make_it_so worker --pool=gevent --concurrency=10
 $ celery -A make_it_so beat
+```
+
+Optionally, you can capture tracing data by starting Jaeger:
+```commandline
+docker run -d --name jaeger \
+  -e COLLECTOR_ZIPKIN_HOST_PORT=:9411 \
+  -p 5775:5775/udp \
+  -p 6831:6831/udp \
+  -p 6832:6832/udp \
+  -p 5778:5778 \
+  -p 16686:16686 \
+  -p 14250:14250 \
+  -p 14268:14268 \
+  -p 14269:14269 \
+  -p 9411:9411 \
+  jaegertracing/all-in-one:1.34
 ```
 
 Here is an HCL file defining some GCP Resources: a VPC Network, a Firewall and an Instance. 
@@ -116,8 +132,8 @@ resource "GcpInstanceResource" "test-instance" {
 To "apply" your Resources run:
 
 ```bash
-# This imports Resources into Django's database and sets their desired_state to 'healthy'. 
-# The Celery workers will get to work immediately to bring these Resources to the desired state.
+# This imports the Resources with their desired_state to 'healthy'. 
+# The workers will notice and get to work immediately.
 $ python manage.py hcl_apply gcp_cluster_simple.tf healthy
 ```
 
@@ -130,25 +146,9 @@ $ python manage.py runserver
 
 To destroy the Resources run:
 ```bash
-# This will set the Resources' desired_state to 'deleted'. Although the underlying resources 
-# will be deleted from the Provider, the Resource *models* will remain in the system.
+# This will set the Resources' desired_state to 'deleted'. The underlying resources 
+# will be deleted from the Provider but the Resource *models* will remain.
 $ python manage.py hcl_apply gcp_cluster_simple.tf deleted
-```
-
-Optionally, you can capture tracing data by starting Jaeger:
-```commandline
-docker run -d --name jaeger \
-  -e COLLECTOR_ZIPKIN_HOST_PORT=:9411 \
-  -p 5775:5775/udp \
-  -p 6831:6831/udp \
-  -p 6832:6832/udp \
-  -p 5778:5778 \
-  -p 16686:16686 \
-  -p 14250:14250 \
-  -p 14268:14268 \
-  -p 14269:14269 \
-  -p 9411:9411 \
-  jaegertracing/all-in-one:1.34
 ```
 
 ## Implementing a custom Resource
@@ -170,7 +170,6 @@ class GcpInstanceResource(GcpResource):
 class GcpInstanceResourceFields(GcpExtraResourceFieldsBase):
 
     network: ResourceForeignKey('gcp_resources.GcpVpcNetworkResource')
-
     zone: Literal[ZONES_TUPLE]
     source_image: str
     machine_type: Literal[MACHINE_TYPES_TUPLE]
@@ -183,8 +182,7 @@ class GcpExtraResourceFieldsBase(PydanticBaseModel):
 
 ```
 
-Here we have defined some additional fields for instances: *self_link, self_id, network, zone, source_image, machine_type*. All of these are strings except for *network*. 
-'Network' will be serialized to the database as a string, an id of another ResourceModel, but it will be interpreted by the system as a **dependency**. 
+Here we have defined some additional fields: *self_link, self_id, network, zone, source_image, machine_type*. All of these are strings except for *network*. 'Network' will be serialized as a string, an id of another ResourceModel, but it will be interpreted by the system as a **dependency**. 
 An instance will not be scheduled for creation until its network is ready and healthy.
 
 ------------------------
@@ -295,13 +293,13 @@ class GcpInstanceResource(GcpResource):
         response_dict = type(resp).to_dict(resp)
         provider_id = self_link
 
-        return success, provider_id, response_dict
+        return success, provider_id, response_dict   # a 3-item tuple is expected
 
 ```
 
 Here we fetch the ResourceModel and pass the relevant fields to the API client. 
 
-Notice the 'extra' Pydantic fields are referenced with an 'x', the 'x' object is an AttrDict populated with any related (ForeignKey) objects.
+Notice the 'x' attribute, this returns an AttrDict populated with data from the Pydantic model along with any related (ForeignKey) ResourceModels.
 
 `create_resource()` will be executed within an `ensure_exists` Transition. This is scheduled only when a Resource's dependencies (here: `instance.x.network`) are ready and healthy.
 
@@ -332,7 +330,7 @@ Make It So is in early stages and **not** ready for production. Some outstanding
 - Tenacity levels: how do we decide whether and when to give up? The system needs a 'never give up' mode where **desired_state** reigns supreme.
 - The event-dispatch model is difficult to follow and reason about, it needs some deeper thought and documentation.
 - Dashboard and visualizations: Make It So has basic tracing with opentelemetry and Jaeger, but it needs its own visualizations for inspecting the timeline of Transitions, Resources and Events.
-
+- The way custom provider_ids are implemented is fragmented and error-prone. These need a dedicated data structure.
 
 ## Internals: for the inquisitive
 
