@@ -221,7 +221,7 @@ Your API clients **must** also key Resources by the same identifier and must sco
 
 ------------------------
 
-3) A `list_resources()` class-method:
+3) The `list_resources()` class-method:
 
 This returns a collection of Resources from the Provider. This dictionary must be keyed by the appropriate provider_id and its results must be scoped to the current project.
 
@@ -272,7 +272,7 @@ class GcpApiListResponse(ResourceApiListResponse, dict):
 
 ------------------------
 
-4) A `create_resource()` method:
+4) The `create_resource()` method:
 
 ```python
 
@@ -305,7 +305,7 @@ Notice the 'x' attribute, this returns an AttrDict populated with data from the 
 
 ------------------------
 
-5) A `delete_resource()` method:
+5) The `delete_resource()` method:
 
 ```python
 
@@ -330,7 +330,7 @@ Make It So is in early stages and **not** ready for production. Some outstanding
 - Tenacity levels: how do we decide whether and when to give up? The system needs a 'never give up' mode where **desired_state** reigns supreme.
 - The event-dispatch model is difficult to follow and reason about, it needs some deeper thought and documentation.
 - Dashboard and visualizations: Make It So has basic tracing with opentelemetry and Jaeger, but it needs its own visualizations for inspecting the timeline of Transitions, Resources and Events.
-- The way custom provider_ids are implemented is fragmented and error-prone. These need a dedicated data structure.
+- The way custom provider_ids are implemented is fragmented and error-prone. It needs a dedicated data structure.
 
 ## Internals: for the inquisitive
 
