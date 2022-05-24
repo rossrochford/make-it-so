@@ -132,7 +132,7 @@ resource "GcpInstanceResource" "test-instance" {
 To "apply" your Resources run:
 
 ```bash
-# This imports the Resources with their desired_state to 'healthy'. 
+# This imports the Resources with their desired_state set to 'healthy'. 
 # The workers will notice and get to work immediately.
 $ python manage.py hcl_apply gcp_cluster_simple.tf healthy
 ```
