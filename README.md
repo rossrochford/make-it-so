@@ -68,11 +68,9 @@ $ python manage.py create_gcp_project
 $ redis-server  # this command may differ on your system
 $ celery -A make_it_so worker --pool=gevent --concurrency=10
 $ celery -A make_it_so beat
-```
 
-Optionally, you can capture tracing data by starting Jaeger:
-```commandline
-docker run -d --name jaeger \
+# optional: run Jaeger to capture tracing data
+$ docker run -d --name jaeger \
   -e COLLECTOR_ZIPKIN_HOST_PORT=:9411 \
   -p 5775:5775/udp \
   -p 6831:6831/udp \
