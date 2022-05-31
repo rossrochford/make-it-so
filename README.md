@@ -29,7 +29,7 @@ For example an 'ensure_exists' Transition is responsible for ensuring a Resource
 
 **Events** are units of activity logged on Resources and Transitions, they not only provide an audit trail for debugging but may also propagate side effects and state changes.
 
-A **Provider** is the point of access to a 3rd-party system that creates the underlying Resources, for example a cloud provider. Typically, a Provider doesn't do very much, it simply knows how to instantiate the API Client(s) that Resource implementations need. 
+A **Provider** is the point of access to a 3rd-party system that creates the underlying Resources, for example a cloud provider. Typically, the Provider class doesn't do very much, it simply knows how to instantiate the API Client(s) that Resource implementations need. 
 
 A **Project** stores credentials for interacting with a Provider, this typically corresponds to some kind of user or account identity on the Provider.  Projects also act as a kind of container/group for related Resources and tend to 'scope' the query behavior of API clients.
 
