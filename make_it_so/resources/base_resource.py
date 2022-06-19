@@ -1,4 +1,4 @@
-from typing import Dict
+from typing import Dict, List
 
 import gevent
 import structlog
@@ -75,15 +75,51 @@ class ProviderBase:
         raise NotImplementedError
 
 
+class ResourceIdentifier:
+
+    MODEL_FIELD = None
+
+    def __init__(self):
+        pass
+
+    @staticmethod
+    def generate(resource_model):
+        raise NotImplementedError
+
+    @staticmethod
+    def get_id_from_list_response(list_resp):
+        raise NotImplementedError
+
+    @staticmethod
+    def get_id_from_creation_response(creation_resp):
+        return None  # optional
+
+    @classmethod
+    def fetch_id(cls, resource_model):
+        assert cls.MODEL_FIELD is not None
+        field_name = cls.MODEL_FIELD
+
+        if field_name in ('slug', 'id'):
+            return getattr(resource_model, field_name)
+
+        extra_data = resource_model.extra_data or {}
+
+        stored_id = extra_data.get(field_name)
+        if stored_id:
+            return stored_id
+
+        return cls.generate(resource_model)
+
+
 class ResourceBase:
 
     RESOURCE_MODEL_CLASS = ResourceModel
     EXTRA_FIELDS_MODEL_CLASS = None
+    IDENTIFIER = None
 
     HAS_DEPENDENCIES = True  # true by default, most resources have dependencies
 
     PROVIDER = None
-    PROVIDER_ID_FIELD = 'slug'
 
     FETCH_DELAY = 3
 
@@ -111,49 +147,26 @@ class ResourceBase:
         if self.cluster:
             self.labels = {'cluster_uid': self.cluster.uid}
 
-    def get_provider_identifier(self):
-        field_name = self.PROVIDER_ID_FIELD
-
-        if field_name in ('slug', 'id'):
-            return getattr(self.model_obj, field_name)
-
-        if self.model_obj.extra_data is None:
-            self.model_obj.extra_data = {}  # unlikely, but just in case
-
-        stored_id = self.model_obj.extra_data.get(field_name)
-        if stored_id:
-            return stored_id
-
-        logger.warning(  # should have been set during hcl ingestion
-            f'provider id {field_name} was not found in extra_data'
-        )
-        generated_id = self.generate_provider_id(self.model_obj)
-        self.model_obj.extra_data[field_name] = generated_id
-        self.model_obj.save()
-        return generated_id
-
     @classmethod
     def get_initial_transition_type(cls):
         if cls.HAS_DEPENDENCIES:
             return 'ensure_dependencies_ready'
         return 'ensure_exists'
 
-    @staticmethod
-    def generate_provider_id(model_obj):
-        raise Exception('generate_provider_id() is not implemented')
-
     @classmethod
-    def get_resource(cls, cli, project, provider_id):
-        resources_by_id = cls.list_resources(cli, project)
-        return resources_by_id.get(provider_id)
+    def get_resource(cls, cli, project, id):
+        existing = {
+            cls.IDENTIFIER.get_id_from_list_response(resp): resp
+            for resp in cls.list_resources(cli, project)
+        }
+        return existing.get(id)
 
     def fetch(self):
-        return self.get_resource(
-            self.cli, self.project, self.get_provider_identifier()
-        )
+        id = self.IDENTIFIER.fetch_id(self.model_obj)
+        return self.get_resource(self.cli, self.project, id)
 
     @classmethod
-    def list_resources(cls, cli, project) -> Dict[str, ResourceApiListResponse]:
+    def list_resources(cls, cli, project) -> List:
         raise NotImplementedError
 
     def create_resource(self):
@@ -174,21 +187,52 @@ class ResourceBase:
         assert num_retries > 0
 
         for i in range(num_retries):
-
-            existing_by_id = cached_existing if i == 0 else None
-            if existing_by_id is None:
-                existing_by_id = self.list_resources(self.cli, self.project)
-
-            id = self.get_provider_identifier()
-            if id in existing_by_id:
-                return True, existing_by_id[id]
+            exists, resp = self._do_check(i, cached_existing)
+            if exists:
+                return True, resp
             gevent.sleep(self.FETCH_DELAY)
 
         return False, None
 
+    def _do_check(self, i, cached_existing):
+        existing = cached_existing if i == 0 else None
+        if existing is None:
+            existing = {
+                self.IDENTIFIER.get_id_from_list_response(resp): resp
+                for resp in self.list_resources(self.cli, self.project)
+            }
+        id = self.IDENTIFIER.fetch_id(self.model_obj)
+        exists = id in existing
+        return exists, existing.get(id)
+
+    def exists_hook_base(
+        self, creation_response=None, list_response=None
+    ):
+        obj = self.model_obj
+
+        assert self.IDENTIFIER is not None and self.IDENTIFIER.MODEL_FIELD is not None
+        assert creation_response or list_response
+        assert not (creation_response and list_response)
+
+        id_field_name = self.IDENTIFIER.MODEL_FIELD
+
+        if obj.extra_data is None:  # just in case
+            obj.extra_data = {}
+            obj.save()
+
+        id = None
+        if id_field_name not in ('slug', 'id'):
+            if creation_response:
+                id = self.IDENTIFIER.get_id_from_creation_response(creation_response)
+            if list_response:
+                id = self.IDENTIFIER.get_id_from_list_response(list_response)
+
+            if id is not None and id != obj.extra_data.get(id_field_name):
+                obj.extra_data[id_field_name] = id
+                obj.save()
+
     def exists_hook(
-        self, creation_response=None, list_response=None,
-        provider_id=None
+        self, creation_response=None, list_response=None
     ):
         logger.warning(
             'exists_hook() implementation missing', cls=self.__class__

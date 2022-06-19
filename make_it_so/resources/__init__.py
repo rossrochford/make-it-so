@@ -40,6 +40,7 @@ EVENT_SIDE_EFFECTS = {
     'resource_found_and_healthy': 'healthy',
 
     ('ensure_dependencies_ready', 'terminal_failure'): 'creation_terminated',
+
     ('ensure_exists', 'terminal_failure'): 'creation_terminated',
     ('ensure_healthy', 'terminal_failure'): 'creation_terminated',
 

@@ -1,9 +1,9 @@
-from typing import Dict
+from typing import Dict, List
 
 import structlog
 
 from base_classes.enum_types import BaseStrEnum
-from gcp_resources.resources.base_resource import GcpResource, GcpExtraResourceFieldsBase
+from gcp_resources.resources.base_resource import GcpResource, GcpExtraResourceFieldsBase, GcpResourceIdentifier
 from gcp_resources.resources.subnets import GcpSubnetResource
 from resources.models import ResourceModel
 from resources.utils import ResourceApiListResponse
@@ -23,20 +23,30 @@ class GcpNetworkResourceFields(GcpExtraResourceFieldsBase):
     auto_create_subnetworks: bool = True
 
 
+class GcpVpcNetworkIdentifier(GcpResourceIdentifier):
+
+    @staticmethod
+    def generate(resource_model):
+        project_id = resource_model.project.slug
+        return f'https://www.googleapis.com/compute/v1/projects/{project_id}/global/networks/{resource_model.slug}'
+
+
 class GcpVpcNetworkResource(GcpResource):
 
     EXTRA_FIELDS_MODEL_CLASS = GcpNetworkResourceFields
+    IDENTIFIER = GcpVpcNetworkIdentifier
     HAS_DEPENDENCIES = False
-
-    @staticmethod
-    def generate_provider_id(model_obj):
-        project_id = model_obj.project.slug
-        return f'https://www.googleapis.com/compute/v1/projects/{project_id}/global/networks/{model_obj.slug}'
+    RETRY_PARAMS = {
+        'ensure_healthy': {
+            'retry_backoff': 2,
+            'max_retries': 15,
+            'total_timeout': 4200
+        }
+    }
 
     @classmethod
-    def list_resources(cls, cli, project) -> Dict[str, ResourceApiListResponse]:
-        responses = cli.list_networks(project.slug)
-        return {resp.provider_id: resp for resp in responses}
+    def list_resources(cls, cli, project) -> List:
+        return cli.list_networks(project.slug)
 
     def create_resource(self):
         obj = self.model_obj
@@ -47,7 +57,7 @@ class GcpVpcNetworkResource(GcpResource):
             auto_create_subnetworks=obj.extra.auto_create_subnetworks
         )
         success, self_link, response = tup
-        return success, self_link, response
+        return success, response
 
     def delete_resource(self):
         network_obj = self.model_obj

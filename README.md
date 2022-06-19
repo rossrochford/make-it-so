@@ -60,8 +60,8 @@ $ cd make_it_so/
 $ python manage.py migrate
 $ python manage.py init_db
 
-# create a GCP project, note: you will need an active billing account on GCP.
-# On completion it will output a unique Project.id, make note of this.
+# create a GCP project, note: you will need an active GCP billing account.
+# On completion it will output a unique ProjectModel.id, make a note of this.
 $ python manage.py create_gcp_project
 
 # start Redis, celery workers, and celery-beat (in separate terminals)
@@ -90,8 +90,8 @@ Here is an HCL file defining some GCP Resources: a VPC Network, a Firewall and a
 // gcp_cluster_simple.tf
 
 provider "google" {
-  # note: this is primary key of the ProjectModel, not GCP's project_id
-  project_id = "YOUR_PROJECT_ID"  
+  # note: this is primary key of the ProjectModel in the database, not the GCP project_id
+  project_id = "YOUR_PROJECT_ID"   
   resources_app = "gcp_resources"
 }
 
@@ -185,43 +185,52 @@ An instance will not be scheduled for creation until its network is ready and he
 
 ------------------------
 
-2) A method for generating a provider_id, note: this is optional
+2) A *ResourceIdentifier* class:
 
 ```python
 
-class GcpInstanceResource(GcpResource):
+class GcpInstanceIdentifier(ResourceIdentifier):
+    
+    MODEL_FIELD = 'self_link'  # mandatory
 
     @staticmethod
-    def generate_provider_id(model_obj):
-        project_id = model_obj.project.slug
-        zone = model_obj.x.zone
-        return f'https://www.googleapis.com/compute/v1/projects/{project_id}/zones/{zone}/instances/{model_obj.slug}'
+    def get_id_from_list_response(list_resp):  # mandatory
+        return list_resp.get('selfLink') or list_resp.get('self_link')
+
+    @staticmethod
+    def get_id_from_creation_response(creation_resp):  # optional method
+        return creation_resp.get('selfLink') or creation_resp.get('self_link')
+    
+    @staticmethod
+    def generate(resource_model):  # mandatory
+        project_id = resource_model.project.slug
+        zone = resource_model.x.zone
+        return f'https://www.googleapis.com/compute/v1/projects/{project_id}/zones/{zone}/instances/{resource_model.slug}'
 
     
 # gcp_resources/resources/base_resource.py    
 class GcpResource(ResourceBase):
 
     PROVIDER = GcpProvider
-    PROVIDER_ID_FIELD = 'self_link'  
-    # PROVIDER_ID_FIELD specifies where to on the model store the provider id, it must be set when implementing generate_provider_id()
+    IDENTIFIER = GcpInstanceIdentifier
 ```
 
-When the system queries a Provider to check whether a Resource exists, it expects the API client to confirm or deny this by using a known *identifier*, unique within the Project.
+This binds a *ResourceModel* object to the concrete resource on the provider. The `generate()` method derives an id string from the model object and `get_id_from_list_response()` specifies how to fetch this same id from a provider API response. 
 
-The default of `ResourceModel.slug` is often sufficient, provided your Provider API client scopes its queries to the Project correctly. Here we're using GCP self_links here because they are easy to derive less ambiguous than *slug*.
+It is critical that these two methods are implemented correctly, otherwise Make It So will not track your resources correctly.
 
 
 #### A note on identifiers: 
 
-A quirk of Make It So is that Resource identifiers must be knowable *before* the underlying Resource has been created. *ResourceModel.slug* is used by default because slugs are unique per Resource-type within a Project (enforced by the database). 
+A quirk of Make It So is that Resource identifiers must be knowable *before* the underlying Resource has been created. Therefore an indeterminate unique id returned by the provider will not suffice, because this is only knowable after creation.
 
-Your API clients **must** also key Resources by the same identifier and must scope its queries to a Project. Take care when sharing credentials across multiple projects as this may result in name conflicts.
+In simple setups it may be sufficient to use *ResourceModel.slug* as the identifier. Slugs are unique per Resource-type within a Project (enforced by the database). When using slugs as identifiers, be sure that your API clients are scoping their queries to the Project so that resource ids don't get confused across Projects. Take care also not to reuse provider credentials across multiple Projects.
 
 ------------------------
 
 3) The `list_resources()` class-method:
 
-This returns a collection of Resources from the Provider. This dictionary must be keyed by the appropriate provider_id and its results must be scoped to the current project.
+This returns a collection of resources from the Provider API. The items this returns are what gets passed to `ResourceIdentifier.get_id_from_list_response()` 
 
 
 ```python
@@ -229,11 +238,10 @@ This returns a collection of Resources from the Provider. This dictionary must b
 class GcpInstanceResource(GcpResource):
 
     @classmethod
-    def list_resources(cls, cli, project) -> Dict[str, ResourceApiListResponse]:
-        responses = cli.list_instances(
+    def list_resources(cls, cli, project) -> List:
+        return cli.list_instances(
             project.slug, with_statuses=('PROVISIONING', 'STAGING', 'RUNNING')
         )
-        return {resp.provider_id: resp for resp in responses}
 ```
 
 For context here is how Provider creates the API client and where responses get wrapped in a `ResourceApiListResponse` class.
@@ -289,9 +297,8 @@ class GcpInstanceResource(GcpResource):
             network_name=instance.x.network.x.self_link
         )
         response_dict = type(resp).to_dict(resp)
-        provider_id = self_link
-
-        return success, provider_id, response_dict   # a 3-item tuple is expected
+        
+        return success, response_dict   # a 2-item tuple is expected
 
 ```
 
@@ -328,7 +335,7 @@ Make It So is in early stages and **not** ready for production. Some outstanding
 - Tenacity levels: how do we decide whether and when to give up? The system needs a 'never give up' mode where **desired_state** reigns supreme.
 - The event-dispatch model is difficult to follow and reason about, it needs some deeper thought and documentation.
 - Dashboard and visualizations: Make It So has basic tracing with opentelemetry and Jaeger, but it needs its own visualizations for inspecting the timeline of Transitions, Resources and Events.
-- The way custom provider_ids are implemented is fragmented and error-prone. It needs a dedicated data structure.
+- Updatable Resources, Resources cannot currently be modified once they have been created. 
 
 ## Internals: for the inquisitive
 
@@ -346,8 +353,6 @@ To understand how the scheduling and state-machine works, see:
 * `transitions/celery_utils/task_class.py` - A custom Celery task class for Transitions. This adds custom retry/timeout logic to Celery, and propagates exceptions into actionable events.
 * `transitions/tasks/daemon_tasks.py` - Daemon tasks, these run periodically, checking for any Transitions that need to be created or scheduled.
 * `resources/models.py:ResourceModel.log_event()` - Events logged on Resources may cause state changes, future work will need to rethink this as it is difficult to reason about.
+* `resources/hcl_utils/ingestion.py` - How HCL ingestion works (excuse the mess!)
 * `resources/models.py:ResourceDependencyModel` - How Resource dependencies are stored.
 * `base_classes/pydantic_models.py:PydanticBaseModel` - Base Pydantic model class for representing 'extra' Resource fields, this includes magic for simulating foreign keys.
-* `resources/hcl_utils/ingestion.py` - How HCL ingestion works (excuse the mess!)
-
-

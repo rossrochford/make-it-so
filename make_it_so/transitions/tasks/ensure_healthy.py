@@ -44,7 +44,9 @@ def ensure_healthy(self, transition_pk, **kwargs):
         exists, list_resp = c.resource_w.check_exists()
         if exists is False:  # should we terminate early?
             raise TaskRetryException('resource_not_found')
+
         self.log_resource_event('resource_found')
+        c.resource_w.exists_hook_base(list_response=list_resp)
         c.resource_w.exists_hook(list_response=list_resp)
 
     for healthcheck_method in health_checks:

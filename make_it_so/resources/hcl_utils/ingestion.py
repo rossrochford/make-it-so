@@ -46,21 +46,21 @@ def create_resource_from_hcl(
     ResourceClass = resource_classes[hcl_entry.rtype]
     ModelClass = ResourceClass.RESOURCE_MODEL_CLASS
     ExtraModelClass = ResourceClass.EXTRA_FIELDS_MODEL_CLASS
-    provider_id_field = ResourceClass.PROVIDER_ID_FIELD
+    id_field_name = ResourceClass.IDENTIFIER.MODEL_FIELD
 
     tup = _collect_model_fields(hcl_entry, ResourceClass)
     new_values, extra_data, new_m2m_values, model_obj = tup
 
-    if provider_id_field in ('slug', 'id'):
+    if id_field_name in ('slug', 'id'):
         pass
 
     # If exclude is set, a temporary subclass of ExtraModelClass is generated
-    # with the field set as optional. This is so generate_provider_id() can use
+    # with the field set as optional. This is so ResourceIdentifier.generate() can use
     # fields on ExtraModelClass via the model_obj.extra attrdict. Once the provider id
-    # is set, we proceed to validate against the original pydantic model,
-    # replace the attrdict obj and write the validated data to model_obj.extra_data.
+    # is set, we proceed to validate against the original pydantic model, replace
+    # the attrdict obj and write the validated data to model_obj.extra_data
     try:
-        exl = None if provider_id_field in ('slug', 'id') else [provider_id_field]
+        exl = None if id_field_name in ('slug', 'id') else [id_field_name]
         extra_obj = ExtraModelClass.validate_and_create(extra_data, exclude=exl)
         extra_attr_dict = extra_obj.create_attr_dict(throw_missing=True)
     except PydanticValidationError as e:
@@ -82,9 +82,9 @@ def create_resource_from_hcl(
             'hcl_validation_failed', reason=f'hcl clean failed: {e}'
         )
 
-    if provider_id_field not in ('slug', 'id'):  # is it possible we might want to use generate_provider_id() to generate a slug?
-        provider_id = ResourceClass.generate_provider_id(model_obj)
-        extra_data[provider_id_field] = provider_id
+    if id_field_name not in ('slug', 'id'):  # is it possible we might want to use generate_provider_id() to generate a slug?
+        provider_id = ResourceClass.IDENTIFIER.generate(model_obj)
+        extra_data[id_field_name] = provider_id
         try:
             extra_obj = ExtraModelClass(**extra_data)
         except PydanticValidationError as e:

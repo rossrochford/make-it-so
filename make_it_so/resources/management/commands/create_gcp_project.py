@@ -45,7 +45,7 @@ def _prompt_for_project_id(existing_projects):
 
 def _prompt_for_credentials_filepath():
     while True:
-        credentials_filepath = input('enter a path to store your credentials file: ').strip()
+        credentials_filepath = input('enter an absolute path for your credentials json file (e.g. /home/me/my-gcp-creds.json) : ').strip()
         if credentials_filepath.endswith('.json') is False:
             print('path must be a .json file name')
             continue

@@ -21,7 +21,7 @@ class GcpSubnetResource(GcpResource):
     EXTRA_FIELDS_MODEL_CLASS = GcpSubnetResourceFields
 
     @staticmethod
-    def generate_provider_id(model_obj):
+    def generate_provider_id(model_obj):  # todo: move this to a ResourceIdentifier class
         project_id = model_obj.project.slug
         network = model_obj.extra.network
         region = model_obj.extra.region

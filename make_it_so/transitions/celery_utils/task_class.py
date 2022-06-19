@@ -302,10 +302,12 @@ class TransitionTask(Task):
     def log_events_for_exception(self, exc, einfo, transition, failure=False):
 
         if isinstance(exc, (TaskRetryException, TaskFailureException)):
-            return self.log_resource_event(
+            self.log_resource_event(
                 exc.event_type, reason=exc.reason, transition=transition,
                 extra_info=exc.extra_info, exc=exc, einfo=einfo
             )
+        if isinstance(exc, TaskFailureException):
+            failure = True
         if isinstance(exc, (SoftTimeLimitExceeded, TimeLimitExceeded)):
             transition.log_event('timeout')
 

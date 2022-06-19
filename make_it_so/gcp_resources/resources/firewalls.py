@@ -7,7 +7,7 @@ from base_classes.enum_types import BaseStrEnum
 from base_classes.pydantic_models import (
     PydanticBaseModel, ResourceForeignKey, IPv4CidrRange
 )
-from gcp_resources.resources.base_resource import GcpResource, GcpExtraResourceFieldsBase
+from gcp_resources.resources.base_resource import GcpResource, GcpExtraResourceFieldsBase, GcpResourceIdentifier
 from resources.utils import ResourceApiListResponse
 
 
@@ -62,20 +62,22 @@ class GcpFirewallResourceFields(GcpExtraResourceFieldsBase):
     enable_logging: bool = False
 
 
+class GcpFirewallIdentifier(GcpResourceIdentifier):
+
+    @staticmethod
+    def generate(resource_model):
+        project_id = resource_model.project.slug
+        return f'https://www.googleapis.com/compute/v1/projects/{project_id}/global/firewalls/{resource_model.slug}'
+
+
 class GcpFirewallResource(GcpResource):
 
     EXTRA_FIELDS_MODEL_CLASS = GcpFirewallResourceFields
-
-    @staticmethod
-    def generate_provider_id(model_obj):
-        project_id = model_obj.project.slug
-        return f'https://www.googleapis.com/compute/v1/projects/{project_id}/global/firewalls/{model_obj.slug}'
+    IDENTIFIER = GcpFirewallIdentifier
 
     @classmethod
-    def list_resources(cls, cli, project) -> Dict[str, ResourceApiListResponse]:
-        return {
-            resp.provider_id: resp for resp in cli.list_firewalls(project.slug)
-        }
+    def list_resources(cls, cli, project) -> List:
+        return cli.list_firewalls(project.slug)
 
     def create_resource(self):
         obj = self.model_obj
@@ -94,7 +96,7 @@ class GcpFirewallResource(GcpResource):
             obj.extra.deny_rules,
             enable_logging=obj.extra.enable_logging
         )
-        return success, self_link, response
+        return success, response
 
     def delete_resource(self):
         obj = self.model_obj

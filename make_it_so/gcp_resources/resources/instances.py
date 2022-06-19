@@ -1,11 +1,11 @@
-from typing import Dict, Literal
+from typing import Dict, Literal, List
 
 from django.core.exceptions import ValidationError
 import structlog
 
 from base_classes.pydantic_models import ResourceForeignKey
 from gcp_resources.api_client import GcpApiClient
-from gcp_resources.resources.base_resource import GcpResource, GcpExtraResourceFieldsBase
+from gcp_resources.resources.base_resource import GcpResource, GcpExtraResourceFieldsBase, GcpResourceIdentifier
 from gcp_resources.types import ZONES, MACHINE_TYPES
 from resources.utils import ResourceApiListResponse
 from users.models import ProjectModel
@@ -27,23 +27,27 @@ class GcpInstanceResourceFields(GcpExtraResourceFieldsBase):
     machine_type: Literal[MACHINE_TYPES_TUPLE]
 
 
+
+class GcpInstanceIdentifier(GcpResourceIdentifier):
+
+    @staticmethod
+    def generate(resource_model):
+        project_id = resource_model.project.slug
+        zone = resource_model.x.zone
+        return f'https://www.googleapis.com/compute/v1/projects/{project_id}/zones/{zone}/instances/{resource_model.slug}'
+
+
 class GcpInstanceResource(GcpResource):
 
     EXTRA_FIELDS_MODEL_CLASS = GcpInstanceResourceFields
-
-    @staticmethod
-    def generate_provider_id(model_obj):
-        project_id = model_obj.project.slug
-        zone = model_obj.x.zone
-        return f'https://www.googleapis.com/compute/v1/projects/{project_id}/zones/{zone}/instances/{model_obj.slug}'
+    IDENTIFIER = GcpInstanceIdentifier
 
     @classmethod
-    def list_resources(cls, cli, project) -> Dict[str, ResourceApiListResponse]:
+    def list_resources(cls, cli, project) -> List:
         # note: this risks attempts to create an instance that is merely being restarted
-        responses = cli.list_instances(
+        return cli.list_instances(
             project.slug, with_statuses=('PROVISIONING', 'STAGING', 'RUNNING')
         )
-        return {resp.provider_id: resp for resp in responses}
 
     def create_resource(self):
 
@@ -57,9 +61,8 @@ class GcpInstanceResource(GcpResource):
             network_name=instance.x.network.x.self_link
         )
         response_dict = type(resp).to_dict(resp)
-        provider_id = self_link
 
-        return success, provider_id, response_dict
+        return success, response_dict
 
     def delete_resource(self):
         obj = self.model_obj
