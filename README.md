@@ -180,8 +180,9 @@ class GcpExtraResourceFieldsBase(PydanticBaseModel):
 
 ```
 
-Here we have defined some additional fields: *self_link, self_id, network, zone, source_image, machine_type*. All of these are strings except for *network*. 'Network' will be serialized as a string, an id of another ResourceModel, but it will be interpreted by the system as a **dependency**. 
-An instance will not be scheduled for creation until its network is ready and healthy.
+Here we have defined some additional fields: *self_link, self_id, network, zone, source_image, machine_type*. 
+
+The 'network' field will be serialized as a string, an id of another ResourceModel, it will be interpreted and tracked by the system as a **dependency**. An instance will not be scheduled for creation until its network is ready and healthy.
 
 ------------------------
 
@@ -215,16 +216,16 @@ class GcpResource(ResourceBase):
     IDENTIFIER = GcpInstanceIdentifier
 ```
 
-This binds a *ResourceModel* object to the concrete resource on the provider. The `generate()` method derives an id string from the model object and `get_id_from_list_response()` specifies how to fetch this same id from a provider API response. 
+This binds a *ResourceModel* in the database to a concrete entity on the provider. The `generate()` method derives an id string from the model object and `get_id_from_list_response()` specifies how to fetch this same id from a provider API response. 
 
-It is critical that these two methods are implemented correctly, otherwise Make It So will not track your resources correctly.
+It is critical that these two methods are implemented correctly, otherwise Make It So will not be able to track your resources.
 
 
 #### A note on identifiers: 
 
-A quirk of Make It So is that Resource identifiers must be knowable *before* the underlying Resource has been created. Therefore an indeterminate unique id returned by the provider will not suffice, because this is only knowable after creation.
+A quirk of Make It So is that Resource identifiers must be knowable *before* the underlying Resource has been created. Therefore, an indeterminate unique id returned by the provider upon creation will not suffice.
 
-In simple setups it may be sufficient to use *ResourceModel.slug* as the identifier. Slugs are unique per Resource-type within a Project (enforced by the database). When using slugs as identifiers, be sure that your API clients are scoping their queries to the Project so that resource ids don't get confused across Projects. Take care also not to reuse provider credentials across multiple Projects.
+In simple setups it may be sufficient to use *ResourceModel.slug* as the identifier. Slugs are unique per Resource-type within a Project, this is a database-level constraint. When using slugs as identifiers, be sure that your API clients are scoping their queries to the Project so that resource ids don't get confused across Projects. Take care also not to reuse provider credentials across multiple Projects.
 
 ------------------------
 
@@ -244,7 +245,7 @@ class GcpInstanceResource(GcpResource):
         )
 ```
 
-For context here is how Provider creates the API client and where responses get wrapped in a `ResourceApiListResponse` class.
+For context here is how Provider creates the API client.
 
 ```python
 
@@ -261,19 +262,6 @@ class GcpApiClient:
     
     def __init__(self, credentials):
         self.credentials = coerce_gcp_credentials(credentials)
-    
-    def list_instances(self, project_id, with_statuses=None) -> List[GcpApiListResponse]:
-        # ...
-        instances = [GcpApiListResponse(di) for di in instances]  # wrap response
-        return instances
-
-    
-class GcpApiListResponse(ResourceApiListResponse, dict):
-
-    @property
-    def provider_id(self):
-        return self.get('selfLink') or self.get('self_link')
-
 ```
 
 ------------------------
@@ -281,7 +269,6 @@ class GcpApiListResponse(ResourceApiListResponse, dict):
 4) The `create_resource()` method:
 
 ```python
-
 class GcpInstanceResource(GcpResource):
 
     def create_resource(self):
@@ -299,14 +286,13 @@ class GcpInstanceResource(GcpResource):
         response_dict = type(resp).to_dict(resp)
         
         return success, response_dict   # a 2-item tuple is expected
-
 ```
 
 Here we fetch the ResourceModel and pass the relevant fields to the API client. 
 
 Notice the 'x' attribute, this returns an AttrDict populated with data from the Pydantic model along with any related (ForeignKey) ResourceModels.
 
-`create_resource()` will be executed within an `ensure_exists` Transition. This is scheduled only when a Resource's dependencies (here: `instance.x.network`) are ready and healthy.
+`create_resource()` will be executed by an `ensure_exists` Transition. This is scheduled only when a Resource's dependencies (here: `instance.x.network`) are ready and healthy.
 
 ------------------------
 
@@ -334,8 +320,9 @@ Make It So is in early stages and **not** ready for production. Some outstanding
 
 - Tenacity levels: how do we decide whether and when to give up? The system needs a 'never give up' mode where **desired_state** reigns supreme.
 - The event-dispatch model is difficult to follow and reason about, it needs some deeper thought and documentation.
-- Dashboard and visualizations: Make It So has basic tracing with opentelemetry and Jaeger, but it needs its own visualizations for inspecting the timeline of Transitions, Resources and Events.
 - Updatable Resources, Resources cannot currently be modified once they have been created. 
+- Dashboard and visualizations: Make It So has basic tracing with opentelemetry and Jaeger, but it needs its own visualizations for inspecting the timeline of Transitions, Resources and Events.
+
 
 ## Internals: for the inquisitive
 
