@@ -166,23 +166,19 @@ class GcpInstanceResource(GcpResource):
 
     
 class GcpInstanceResourceFields(GcpExtraResourceFieldsBase):
-
+    self_link: str
+    self_id: Optional[str] = None
     network: ResourceForeignKey('gcp_resources.GcpVpcNetworkResource')
     zone: Literal[ZONES_TUPLE]
     source_image: str
     machine_type: Literal[MACHINE_TYPES_TUPLE]
 
-    
-# gcp_resources/resources/base_resource.py
-class GcpExtraResourceFieldsBase(PydanticBaseModel):
-    self_link: str
-    self_id: Optional[str] = None
 
 ```
 
 Here we have defined some additional fields: *self_link, self_id, network, zone, source_image, machine_type*. 
 
-The 'network' field will be serialized as a string, an id of another ResourceModel, it will be interpreted and tracked by the system as a **dependency**. An instance will not be scheduled for creation until its network is ready and healthy.
+The 'network' field will be serialized as the id (string) of another ResourceModel, it will be interpreted and tracked by the system as a **dependency**. Therefore, an instance will not be scheduled for creation until its network is ready and healthy.
 
 ------------------------
 
