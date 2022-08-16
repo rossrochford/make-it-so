@@ -165,7 +165,7 @@ class GcpInstanceResource(GcpResource):
     EXTRA_FIELDS_MODEL_CLASS = GcpInstanceResourceFields
 
     
-class GcpInstanceResourceFields(GcpExtraResourceFieldsBase):
+class GcpInstanceResourceFields(PydanticBaseModel):
     self_link: str
     self_id: Optional[str] = None
     network: ResourceForeignKey('gcp_resources.GcpVpcNetworkResource')
