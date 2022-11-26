@@ -31,7 +31,7 @@ For example an 'ensure_exists' Transition is responsible for ensuring a Resource
 
 A **Provider** is the point of access to a 3rd-party system that creates the underlying Resources, for example a cloud provider. Typically, the Provider class doesn't do very much, it simply knows how to instantiate the API Client(s) that Resource implementations need. 
 
-A **Project** stores credentials for interacting with a Provider, this typically corresponds to some kind of user or account identity on the Provider.  Projects also act as a kind of container/group for related Resources and tend to 'scope' the query behavior of API clients.
+A **Project** stores credentials for interacting with a Provider, this typically corresponds to some kind of user or account identity on the Provider.  Projects also act as a kind of container/group for related Resources and are intended to act as a 'scope' for API queries.
 
 
 ## Getting started: Google Cloud Resources
@@ -219,7 +219,7 @@ It is critical that these two methods are implemented correctly, otherwise Make 
 
 #### A note on identifiers: 
 
-A quirk of Make It So is that Resource identifiers must be knowable *before* the underlying Resource has been created. Therefore, an indeterminate unique id returned by the provider upon creation will not suffice.
+A quirk of Make It So is that Resource identifiers must be knowable *before* the underlying Resource has been created. Therefore, an id that is returned by the provider after the resource is created cannot be used.
 
 In simple setups it may be sufficient to use *ResourceModel.slug* as the identifier. Slugs are unique per Resource-type within a Project, this is a database-level constraint. When using slugs as identifiers, be sure that your API clients are scoping their queries to the Project so that resource ids don't get confused across Projects. Take care also not to reuse provider credentials across multiple Projects.
 

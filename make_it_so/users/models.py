@@ -74,6 +74,8 @@ class ProjectModel(BaseModel):
     provider_specific_data = models.JSONField(default=dict, blank=False)
     credentials = models.JSONField(default=dict, blank=False)  # todo: encrypt
 
+    # future work: EXTRA_FIELDS_MODEL_CLASS
+
     @property
     def project(self):  # will this prevent a project column?
         return self
@@ -104,3 +106,4 @@ class ProjectModel(BaseModel):
             gcp_project.save()
 
         return gcp_project
+

@@ -1,7 +1,6 @@
 from base_classes.enum_types import BaseStrEnum
 
 
-
 class ProviderTypesEnum(BaseStrEnum):
     HETZNER = 'hetzner'
     GOOGLE = 'google'

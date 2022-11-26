@@ -7,7 +7,6 @@ from celery.contrib import rdb
 from celery.exceptions import SoftTimeLimitExceeded, TimeLimitExceeded
 from celery.exceptions import Ignore as IgnoreException
 from celery.worker import state as worker_state
-from opentelemetry import trace
 import structlog
 
 from transitions.celery_utils.context import TransitionTaskContext
@@ -19,10 +18,6 @@ from transitions.celery_utils.tracing import trace_method
 
 
 logger = structlog.get_logger(__name__)
-tracer = trace.get_tracer(__name__)
-
-
-# I think this is what I need: https://opentelemetry.io/docs/instrumentation/python/cookbook/#manually-setting-span-context
 
 
 CELERY_POOL_TYPE = os.environ['CELERY_POOL_TYPE']
@@ -337,7 +332,8 @@ class TransitionTask(Task):
 
         transition = transition or t or self.get_transition(self.request)
         if transition is None:
-            return logger.warning('log_event() has no transition')
+            logger.warning('log_event() has no transition')
+            return
 
         transition.resource.log_event(
             event_type, reason=reason, t=transition,

@@ -54,10 +54,10 @@ def create_resource_from_hcl(
     if id_field_name in ('slug', 'id'):
         pass
 
-    # If exclude is set, a temporary subclass of ExtraModelClass is generated
-    # with the field set as optional. This is so ResourceIdentifier.generate() can use
-    # fields on ExtraModelClass via the model_obj.extra attrdict. Once the provider id
-    # is set, we proceed to validate against the original pydantic model, replace
+    # If 'exclude' is set, a temporary subclass of ExtraModelClass is generated with
+    # the field configured to be optional. This is so ResourceIdentifier.generate() can
+    # use fields on ExtraModelClass via the model_obj.extra attrdict. Once the provider
+    # id is set, we proceed to validate against the original pydantic model, replace
     # the attrdict obj and write the validated data to model_obj.extra_data
     try:
         exl = None if id_field_name in ('slug', 'id') else [id_field_name]

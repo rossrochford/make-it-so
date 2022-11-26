@@ -4,14 +4,11 @@ from celery.contrib import rdb
 from celery.worker import state as worker_state
 from celery.worker.request import Request
 import structlog
-from opentelemetry import trace
 
 from transitions.celery_utils.context import TransitionTaskContext
-from transitions.celery_utils.tracing import StartSpanWithCarrier
 
 
 logger = structlog.get_logger(__name__)
-tracer = trace.get_tracer(__name__)
 
 task_ready = worker_state.task_ready
 

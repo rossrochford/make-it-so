@@ -1,5 +1,6 @@
 import json
 import os
+from os.path import isfile
 
 from django.core.management.base import BaseCommand
 import structlog
@@ -51,6 +52,9 @@ def _prompt_for_credentials_filepath():
             continue
         if credentials_filepath[0] != '/':
             print('must be an absolute path')
+            continue
+        if not isfile(credentials_filepath):
+            print('file not found')
             continue
         return credentials_filepath
 

@@ -4,7 +4,7 @@ import gevent
 import structlog
 
 from resources.models import ResourceModel
-from resources.utils import ResourceApiListResponse, CatchTime
+from resources.utils import CatchTime
 from transitions.celery_utils import get_exponential_backoff_interval
 
 
@@ -22,13 +22,6 @@ todo: implement resource class validation steps:
     - validate retry args (currently we're doing this on every retry but we only need to do it once)
 '''
 
-# future work:
-'''
-- add Provider class, this contains:
-    - an EXTRA_FIELDS_MODEL_CLASS for ProjectModel
-    - a base pydantic model for resources (and if it is set, we hook this into the validation on the resource classes)
-    - the create_cli() method
-'''
 
 RETRY_PARAMS = {
     # summary of params: http://www.ines-panker.com/2020/10/29/retry-celery-tasks.html
@@ -123,22 +116,22 @@ class ResourceBase:
 
     FETCH_DELAY = 3
 
-    # AUTORETRY_FOR = None  not trivial to set this per resource
+    # AUTORETRY_FOR removed: setting this per resource is not trivial
     RETRY_PARAMS = RETRY_PARAMS
 
     def __init__(self, model_obj, transition, cli=None):
         self.cluster = None  # disabled for now
         self.project = model_obj.project
 
-        self.t = transition  # note: this is None when ingesting HCL
-        self.transition = transition
+        # note: this is None when ingesting HCL
+        self.transition = self.t = transition
 
         self.cli = cli
         if self.cli is None:
             with CatchTime() as t:
                 self.cli = self.create_cli(model_obj.rtype, self.project)
-            if t.duration > 0.25:
-                logger.info('create_cli()', duration=t.duration)
+            if t.duration > 0.4:
+                logger.info('create_cli() took a while', duration=t.duration)
 
         self.model_obj = model_obj
         model_obj.extra_fields_model_class = self.EXTRA_FIELDS_MODEL_CLASS
@@ -187,14 +180,14 @@ class ResourceBase:
         assert num_retries > 0
 
         for i in range(num_retries):
-            exists, resp = self._do_check(i, cached_existing)
+            exists, resp = self._do_existence_check(i, cached_existing)
             if exists:
                 return True, resp
             gevent.sleep(self.FETCH_DELAY)
 
         return False, None
 
-    def _do_check(self, i, cached_existing):
+    def _do_existence_check(self, i, cached_existing):
         existing = cached_existing if i == 0 else None
         if existing is None:
             existing = {

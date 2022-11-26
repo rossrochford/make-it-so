@@ -111,8 +111,8 @@ class ResourceModel(BaseModel):
         self._extra_attrdict = None
 
     # note: unlike a regular integer pk, this gets set when instantiating
-    # an object (i.e. before save() is called) so you can't check use self.pk
-    # to ascertain whether an instance is new. This doesn't appear to be a bug,
+    # an object (i.e. before save() is called) so you can't use self.pk
+    # to ascertain whether an ORM object is new. This doesn't appear to be a bug,
     # django's built-in models.UUIDField() does the same.
     id = ShortUUIDField(
         length=16, max_length=16, primary_key=True, editable=False,
@@ -156,9 +156,8 @@ class ResourceModel(BaseModel):
     )
 
     # 'existence' and 'health' are more recent/fine-grained than 'state'.
-    # The system may update these incidentally as side effects, so as not to
-    # waste data that may be useful for monitoring or anomaly detection.
-    # (could also include fields to record dependency checks?)
+    # The system may update these incidentally as side effects, to
+    # improve visibility/monitoring.
     existence = models.CharField(
         max_length=64, choices=ExistenceEnum.choices(),
         default=ExistenceEnum.unknown
